@@ -287,7 +287,7 @@ static float score_board(board_t board);
 // score over all possible moves
 static float score_move_node(eval_state &state, board_t board, float cprob);
 // score over all possible tile choices and placements
-static float score_tilechoose_node(eval_state &state, board_t board, float cprob);
+static float score_tilechoose_node(eval_state &state, board_t board, float cprob, bool minimax=false);
 
 
 static float score_helper(board_t board, const float* table) {
@@ -312,7 +312,7 @@ static float score_board(board_t board) {
 static const float CPROB_THRESH_BASE = 0.0001f;
 static const int CACHE_DEPTH_LIMIT  = 15;
 
-static float score_tilechoose_node(eval_state &state, board_t board, float cprob) {
+static float score_tilechoose_node(eval_state &state, board_t board, float cprob, bool minimax) {
     if (cprob < CPROB_THRESH_BASE || state.curdepth >= state.depth_limit) {
         state.maxdepth = std::max(state.curdepth, state.maxdepth);
         return score_heur_board(board);
@@ -338,18 +338,25 @@ static float score_tilechoose_node(eval_state &state, board_t board, float cprob
     int num_open = count_empty(board);
     cprob /= num_open;
 
-    float res = 0.0f;
+    float res = minimax ? std::numeric_limits<float>::max() : 0.0f;
     board_t tmp = board;
     board_t tile_2 = 1;
     while (tile_2) {
         if ((tmp & 0xf) == 0) {
-            res += score_move_node(state, board |  tile_2      , cprob * 0.9f) * 0.9f;
-            res += score_move_node(state, board | (tile_2 << 1), cprob * 0.1f) * 0.1f;
+            if (minimax) {
+                res = std::min(res, score_move_node(state, board |  tile_2      , cprob * 0.9f) * 0.9f);
+                res = std::min(res, score_move_node(state, board | (tile_2 << 1), cprob * 0.1f) * 0.1f);
+            } else {
+                res += score_move_node(state, board |  tile_2      , cprob * 0.9f) * 0.9f;
+                res += score_move_node(state, board | (tile_2 << 1), cprob * 0.1f) * 0.1f;
+            }
         }
         tmp >>= 4;
         tile_2 <<= 4;
     }
-    res = res / num_open;
+    if (!minimax) {
+        res = res / num_open;
+    }
 
     if (state.curdepth < CACHE_DEPTH_LIMIT) {
         trans_table_entry_t entry = {static_cast<uint8_t>(state.curdepth), res};
