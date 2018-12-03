@@ -89,6 +89,8 @@ static const float SCORE_EMPTY_WEIGHT = 270.0f;
 
 void init_tables() {
     for (unsigned row = 0; row < 65536; ++row) {
+        // Extract the nibble corresponding to each of the four squares.
+        // This is accomplished by right shifting and ANDing with 15.
         unsigned line[4] = {
                 (row >>  0) & 0xf,
                 (row >>  4) & 0xf,
@@ -102,6 +104,9 @@ void init_tables() {
             int rank = line[i];
             if (rank >= 2) {
                 // the score is the total sum of the tile and all intermediate merged tiles
+                // rank 2 : (2 - 1) * 2 ^ 2 = 4
+                // rank 3 : (3 - 1) * 2 ^ 3 = 2 * 8 = 16 = 8 + 4 + 4
+                // rank 4 : (4 - 1) * 2 ^ 4 = 3 * 16 = 16 + 16 + 16
                 score += (rank - 1) * (1 << rank);
             }
         }
