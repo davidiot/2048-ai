@@ -87,7 +87,7 @@ static const float SCORE_SUM_WEIGHT = 11.0f;
 static const float SCORE_MERGES_WEIGHT = 700.0f;
 static const float SCORE_EMPTY_WEIGHT = 270.0f;
 
-void init_tables() {
+void init_tables(bool strict_monotonicity=true) {
     for (unsigned row = 0; row < 65536; ++row) {
         unsigned line[4] = {
                 (row >>  0) & 0xf,
@@ -137,7 +137,7 @@ void init_tables() {
         float monotonicity_left = 0;
         float monotonicity_right = 0;
         for (int i = 1; i < 4; ++i) {
-            if (line[i-1] > line[i]) {
+            if (strict_monotonicity ? (line[i-1] == line[i] + 1) : (line[i-1] > line[i])) {
                 monotonicity_left += pow(line[i-1], SCORE_MONOTONICITY_POWER) - pow(line[i], SCORE_MONOTONICITY_POWER);
             } else {
                 monotonicity_right += pow(line[i], SCORE_MONOTONICITY_POWER) - pow(line[i-1], SCORE_MONOTONICITY_POWER);
