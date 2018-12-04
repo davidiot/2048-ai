@@ -91,6 +91,9 @@ static bool is_full[65536];
 static int first_tile[65536];
 static int last_tile[65536];
 
+// The highest element in the row.
+static int max_tile[65536];
+
 
 
 // Heuristic scoring settings
@@ -133,10 +136,15 @@ void init_tables() {
         int empty = 0;
         int merges = 0;
 
+        int max_rank = 0;
+
         int prev = 0;
         int counter = 0;
         for (int i = 0; i < 4; ++i) {
             int rank = line[i];
+
+            max_rank = std::max(max_rank, rank);
+
             sum += pow(rank, SCORE_SUM_POWER);
             if (rank == 0) {
                 empty++;
@@ -179,10 +187,12 @@ void init_tables() {
         is_full[row] = (empty == 0);
         first_tile[row] = line[0];
         last_tile[row] = line[3];
+        max_tile[row] = max_rank;
 
         // DEBUGGING
         // printf("row:\n");
         // print_row(row);
+        // printf("max tile %d\n", max_tile[row]);
         // printf("first %d last %d\n", first_tile[row], last_tile[row]);
         // printf("is_full: ");
         // printf(is_full[row] ? "true" : "false");
