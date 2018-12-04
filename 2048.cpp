@@ -87,6 +87,9 @@ static int snaking_direction[65536];
 // True iff the row has no empty tiles.
 static bool is_full[65536];
 
+// True iff the row is monotonic.
+static bool is_monotonic[65536];
+
 // The first and last tile in the row.
 static int first_tile[65536];
 static int last_tile[65536];
@@ -185,6 +188,7 @@ void init_tables() {
                 (monotonicity_penalty == monotonicity_right) ? 0 : 1) : -1);
 
         is_full[row] = (empty == 0);
+        is_monotonic[row] = (monotonicity_penalty == 0);
         first_tile[row] = line[0];
         last_tile[row] = line[3];
         max_tile[row] = max_rank;
@@ -332,7 +336,7 @@ struct eval_state {
 };
 
 // score a single board heuristically
-static float score_heur_board(board_t board);
+static float score_heur_board(board_t board, bool score_snakeyness = true);
 // score a single board actually (adding in the score from spawned 4 tiles)
 static float score_board(board_t board);
 // score over all possible moves
@@ -348,9 +352,110 @@ static float score_helper(board_t board, const float* table) {
            table[(board >> 48) & ROW_MASK];
 }
 
-static float score_heur_board(board_t board) {
+// Snakeyness scoring settings
+// static const float SCORE_MONOTONICITY_POWER = 4.0f;
+// static const float SCORE_MONOTONICITY_WEIGHT = 47.0f;
+static const float SNAKING_BONUS = 100000.0f;
+
+// // For each entry, stores information about the direction of the monotonicity.
+// // -1 snaking is higher in the left direction.
+// // 0 snaking is neutral (same in both directions)
+// // 1 snaking is higher in the right direction.
+// static int snaking_direction[65536];
+
+// // True iff the row has no empty tiles.
+// static bool is_full[65536];
+
+// // The first and last tile in the row.
+// static int first_tile[65536];
+// static int last_tile[65536];
+
+// // The highest element in the row.
+// static int max_tile[65536];
+
+static float snakeyness_helper(board_t board, bool debug = false) {
+    row_t rows[4] = {
+        static_cast<row_t>((board >>  0) & ROW_MASK),
+        static_cast<row_t>((board >> 16) & ROW_MASK),
+        static_cast<row_t>((board >> 32) & ROW_MASK),
+        static_cast<row_t>((board >> 48) & ROW_MASK)
+    };
+    if (debug) {
+        printf("board:\n");
+        print_board(board);
+        for (const auto& row : rows) {
+            printf("row:\n");
+            print_row(row);
+        }
+    }
+
+    int index = 0;
+    int highest = 0;
+    for (int i = 0; i < 4; i++) {
+        if (max_tile[rows[i]] > highest) {
+            highest = max_tile[rows[i]];
+            index = i;
+        }
+    }
+
+    if (debug) printf("index %d\n", index);
+
+    float bonus = 0;
+
+    const int offset = (index == 0 ? 1 : -1);
+    int next_index = index + offset;
+    while (next_index < 4 && next_index >= 0) {
+
+        row_t current_row = rows[index];
+        row_t next_row = rows[next_index];
+
+        if (debug) {
+            printf("current row:\n");
+            print_row(current_row);
+            printf("next row:\n");
+            print_row(next_row);
+        }
+
+        // Only care if this row is full;
+        if (!is_full[current_row]) break;
+        if (!is_monotonic[current_row]) break;
+        if (!is_monotonic[next_row]) break;
+
+        // Check if the snaking directions agree.
+        // If the snaking directions are in agreement
+        if (snaking_direction[current_row] > 0) {
+            if (snaking_direction[next_row] > 0) break;
+            int current_connector = first_tile[current_row];
+            int next_connector = first_tile[next_row];
+            if (next_connector == 0 || next_connector > current_connector) break;
+            // printf("current_connector: %d\n", current_connector);
+            // printf("next_connector: %d\n", next_connector);
+        } else if (snaking_direction[current_row] < 0) {
+            if (snaking_direction[next_row] < 0) break;
+            int current_connector = last_tile[current_row];
+            int next_connector = last_tile[next_row];
+            if (next_connector == 0 || next_connector > current_connector) break;
+        }
+        bonus += SNAKING_BONUS;
+
+        index = next_index;
+        next_index = index + offset;
+    }
+    // if (bonus > 0 && !debug) {
+    //     print_board(board);
+    //     snakeyness_helper(board, true);
+    //     printf("bonus: %f\n", bonus);
+    // }
+    return bonus;
+}
+
+static float score_heur_board(board_t board, bool score_snakeyness) {
     return score_helper(          board , heur_score_table) +
-           score_helper(transpose(board), heur_score_table);
+           score_helper(transpose(board), heur_score_table) +
+           (score_snakeyness ? std::max(
+            snakeyness_helper(          board),
+            snakeyness_helper(transpose(board)))
+           : 0);
 }
 
 static float score_board(board_t board) {
@@ -457,8 +562,8 @@ float score_toplevel_move(board_t board, int move) {
     elapsed = (finish.tv_sec - start.tv_sec);
     elapsed += (finish.tv_usec - start.tv_usec) / 1000000.0;
 
-    printf("Move %d: result %f: eval'd %ld moves (%d cache hits, %d cache size) in %.2f seconds (maxdepth=%d)\n", move, res,
-        state.moves_evaled, state.cachehits, (int)state.trans_table.size(), elapsed, state.maxdepth);
+    // printf("Move %d: result %f: eval'd %ld moves (%d cache hits, %d cache size) in %.2f seconds (maxdepth=%d)\n", move, res,
+    //     state.moves_evaled, state.cachehits, (int)state.trans_table.size(), elapsed, state.maxdepth);
 
     return res;
 }
@@ -545,6 +650,7 @@ static board_t initial_board() {
 
 void play_game(get_move_func_t get_move) {
     board_t board = initial_board();
+    // snakeyness_helper(board);
     int moveno = 0;
     int scorepenalty = 0; // "penalty" for obtaining free 4 tiles
 
@@ -559,7 +665,7 @@ void play_game(get_move_func_t get_move) {
         if(move == 4)
             break; // no legal moves
 
-        printf("\nMove #%d, current score=%.0f\n", ++moveno, score_board(board) - scorepenalty);
+        // printf("\nMove #%d, current score=%.0f\n", ++moveno, score_board(board) - scorepenalty);
 
         move = get_move(board);
         if(move < 0)
