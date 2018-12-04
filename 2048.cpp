@@ -84,6 +84,15 @@ static float score_table[65536];
 // 1 snaking is higher in the right direction.
 static int snaking_direction[65536];
 
+// True iff the row has no empty tiles.
+static bool is_full[65536];
+
+// The first and last tile in the row.
+static int first_tile[65536];
+static int last_tile[65536];
+
+
+
 // Heuristic scoring settings
 static const float SCORE_LOST_PENALTY = 200000.0f;
 static const float SCORE_MONOTONICITY_POWER = 4.0f;
@@ -167,9 +176,17 @@ void init_tables() {
             (monotonicity_penalty == monotonicity_left) ? (
                 (monotonicity_penalty == monotonicity_right) ? 0 : 1) : -1);
 
+        is_full[row] = (empty == 0);
+        first_tile[row] = line[0];
+        last_tile[row] = line[3];
+
         // DEBUGGING
         // printf("row:\n");
         // print_row(row);
+        // printf("first %d last %d\n", first_tile[row], last_tile[row]);
+        // printf("is_full: ");
+        // printf(is_full[row] ? "true" : "false");
+        // printf("\n");
         // printf("snaking_direction: ");
         // printf(snaking_direction[row] > 0 ? "right" : (snaking_direction[row] < 0 ? "left" : "none"));
         // printf("\n");
