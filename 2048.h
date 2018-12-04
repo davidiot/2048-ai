@@ -37,6 +37,15 @@ static inline void print_board(board_t board) {
     printf("\n");
 }
 
+static inline void print_row(row_t row) {
+    for(int j=0; j<4; j++) {
+        uint8_t powerVal = (row) & 0xf;
+        printf("%6u", (powerVal == 0) ? 0 : 1 << powerVal);
+        row >>= 4;
+    }
+    printf("\n");
+}
+
 static inline board_t unpack_col(row_t row) {
     board_t tmp = row;
     return (tmp | (tmp << 12ULL) | (tmp << 24ULL) | (tmp << 36ULL)) & COL_MASK;

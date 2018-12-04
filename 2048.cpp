@@ -78,6 +78,12 @@ static board_t col_down_table[65536];
 static float heur_score_table[65536];
 static float score_table[65536];
 
+// For each entry, stores information about the direction of the monotonicity.
+// -1 snaking is higher in the left direction.
+// 0 snaking is neutral (same in both directions)
+// 1 snaking is higher in the right direction.
+static int snaking_direction[65536];
+
 // Heuristic scoring settings
 static const float SCORE_LOST_PENALTY = 200000.0f;
 static const float SCORE_MONOTONICITY_POWER = 4.0f;
@@ -149,11 +155,24 @@ void init_tables() {
             }
         }
 
+        float monotonicity_penalty = std::min(monotonicity_left, monotonicity_right);
+
         heur_score_table[row] = SCORE_LOST_PENALTY +
             SCORE_EMPTY_WEIGHT * empty +
             SCORE_MERGES_WEIGHT * merges -
-            SCORE_MONOTONICITY_WEIGHT * std::min(monotonicity_left, monotonicity_right) -
+            SCORE_MONOTONICITY_WEIGHT * monotonicity_penalty -
             SCORE_SUM_WEIGHT * sum;
+
+        snaking_direction[row] = (
+            (monotonicity_penalty == monotonicity_left) ? (
+                (monotonicity_penalty == monotonicity_right) ? 0 : 1) : -1);
+
+        // DEBUGGING
+        // printf("row:\n");
+        // print_row(row);
+        // printf("snaking_direction: ");
+        // printf(snaking_direction[row] > 0 ? "right" : (snaking_direction[row] < 0 ? "left" : "none"));
+        // printf("\n");
 
         // execute a move to the left
         for (int i = 0; i < 3; ++i) {
