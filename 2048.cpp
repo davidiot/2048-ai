@@ -358,9 +358,7 @@ static float score_helper(board_t board, const float* table) {
 }
 
 // Snakeyness scoring settings
-// static const float SCORE_MONOTONICITY_POWER = 4.0f;
-// static const float SCORE_MONOTONICITY_WEIGHT = 47.0f;
-static const float SNAKING_WEIGHT = 150.0f;
+static float SNAKING_WEIGHT = 150.0f;
 
 // // For each entry, stores information about the direction of the monotonicity.
 // // -1 snaking is higher in the left direction.
@@ -378,7 +376,8 @@ static const float SNAKING_WEIGHT = 150.0f;
 // // The highest element in the row.
 // static int max_tile[65536];
 
-static float snakeyness_helper(board_t board, bool debug = false) {
+static float snakeyness_helper(board_t board/*, bool debug = false*/) {
+    // printf("Set snaking weight to %f\n", SNAKING_WEIGHT);
     row_t rows[4] = {
         static_cast<row_t>((board >>  0) & ROW_MASK),
         static_cast<row_t>((board >> 16) & ROW_MASK),
@@ -729,7 +728,16 @@ void play_game(get_move_func_t get_move) {
     printf("\nGame over. Your score is %.0f. The highest rank you achieved was %d.\n", score_board(board) - scorepenalty, get_max_rank(board));
 }
 
-int main() {
-    init_tables();
-    play_game(find_best_move);
+int main(int argc, char** argv) {
+    if (argc > 1) {
+        SNAKING_WEIGHT = atof(argv[1]);
+        printf("Set snaking weight to %f\n", SNAKING_WEIGHT);
+    }
+    int num_games = argc > 2 ? atof(argv[2]) : 1;
+    printf("Playing %d games\n", num_games);
+    for (int x = 1; x <= num_games; x++) {
+        init_tables();
+        play_game(find_best_move);
+        printf("Finished game %d of %d\n", x, num_games);
+    }
 }
