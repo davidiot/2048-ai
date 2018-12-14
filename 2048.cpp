@@ -96,6 +96,8 @@ static int last_tile[65536];
 
 // The highest element in the row.
 static int max_tile[65536];
+// The smallest element in the row.
+static int min_tile[65536];
 
 
 
@@ -140,6 +142,7 @@ void init_tables() {
         int merges = 0;
 
         int max_rank = 0;
+        int min_rank = 20;
 
         int prev = 0;
         int counter = 0;
@@ -147,6 +150,7 @@ void init_tables() {
             int rank = line[i];
 
             max_rank = std::max(max_rank, rank);
+            min_rank = std::min(min_rank, rank);
 
             sum += pow(rank, SCORE_SUM_POWER);
             if (rank == 0) {
@@ -192,6 +196,7 @@ void init_tables() {
         first_tile[row] = line[0];
         last_tile[row] = line[3];
         max_tile[row] = max_rank;
+        min_tile[row] = min_rank;
 
         // DEBUGGING
         // printf("row:\n");
@@ -355,7 +360,7 @@ static float score_helper(board_t board, const float* table) {
 // Snakeyness scoring settings
 // static const float SCORE_MONOTONICITY_POWER = 4.0f;
 // static const float SCORE_MONOTONICITY_WEIGHT = 47.0f;
-static const float SNAKING_BONUS = 100000.0f;
+static const float SNAKING_WEIGHT = 150.0f;
 
 // // For each entry, stores information about the direction of the monotonicity.
 // // -1 snaking is higher in the left direction.
@@ -380,14 +385,15 @@ static float snakeyness_helper(board_t board, bool debug = false) {
         static_cast<row_t>((board >> 32) & ROW_MASK),
         static_cast<row_t>((board >> 48) & ROW_MASK)
     };
-    if (debug) {
-        printf("board:\n");
-        print_board(board);
-        for (const auto& row : rows) {
-            printf("row:\n");
-            print_row(row);
-        }
-    }
+
+    // if (debug) {
+    //     printf("board:\n");
+    //     print_board(board);
+    //     for (const auto& row : rows) {
+    //         printf("row:\n");
+    //         print_row(row);
+    //     }
+    // }
 
     int index = 0;
     int highest = 0;
@@ -398,55 +404,91 @@ static float snakeyness_helper(board_t board, bool debug = false) {
         }
     }
 
-    if (debug) printf("index %d\n", index);
+    // if (debug) printf("index %d\n", index);
+    int offset = (index == 0 ? 1 : -1);
+    int next_index = index + offset;
+    row_t current_row = rows[index];
+    row_t next_row = rows[next_index];
+    // This is a cap on the penalty.
+    if (index == 1 || index == 2 || !is_monotonic[current_row]) return -1 * SNAKING_WEIGHT * highest * 4;
 
     float bonus = 0;
+    for (int i = 1; i < 4; i++) {
+        // float bonus = 0;
 
-    const int offset = (index == 0 ? 1 : -1);
-    int next_index = index + offset;
-    while (next_index < 4 && next_index >= 0) {
+        // const int offset = (index == 0 ? 1 : -1);
+        // int next_index = index + offset;
+        // while (next_index < 4 && next_index >= 0) {
 
-        row_t current_row = rows[index];
-        row_t next_row = rows[next_index];
+        int rank_difference = min_tile[current_row] - max_tile[next_row];
+        // printf("min_tile %d, max_tile %d, rank difference: %d",
+        //     min_tile[current_row], max_tile[next_row], rank_difference);
 
-        if (debug) {
-            printf("current row:\n");
-            print_row(current_row);
-            printf("next row:\n");
-            print_row(next_row);
-        }
+        // if (rank_difference <= 0) return 0;
+        // printf("min_tile %d, max_tile %d, rank difference: %d, penalty: %f\n",
+        //     min_tile[current_row], max_tile[next_row], rank_difference, -SNAKING_WEIGHT * pow(-rank_difference, SNAKING_POWER));
+        // return -SNAKING_WEIGHT * pow(-rank_difference, SNAKING_POWER);
+        bonus += SNAKING_WEIGHT * rank_difference * std::max(min_tile[current_row], max_tile[next_row]);
 
-        // Only care if this row is full;
-        if (!is_full[current_row]) break;
-        if (!is_monotonic[current_row]) break;
-        if (!is_monotonic[next_row]) break;
-
-        // Check if the snaking directions agree.
-        // If the snaking directions are in agreement
-        if (snaking_direction[current_row] > 0) {
-            if (snaking_direction[next_row] > 0) break;
-            int current_connector = first_tile[current_row];
-            int next_connector = first_tile[next_row];
-            if (next_connector == 0 || next_connector > current_connector) break;
-            // printf("current_connector: %d\n", current_connector);
-            // printf("next_connector: %d\n", next_connector);
-        } else if (snaking_direction[current_row] < 0) {
-            if (snaking_direction[next_row] < 0) break;
-            int current_connector = last_tile[current_row];
-            int next_connector = last_tile[next_row];
-            if (next_connector == 0 || next_connector > current_connector) break;
-        }
-        bonus += SNAKING_BONUS;
-
-        index = next_index;
-        next_index = index + offset;
+        current_row = next_row;
+        next_row = rows[next_index + offset * i];
     }
+    return bonus;
+
+    // if (debug) {
+    //     printf("current row:\n");
+    //     print_row(current_row);
+    //     printf("next row:\n");
+    //     print_row(next_row);
+    // }
+
+    // Only care if this row is full;
+    // if (!is_full[current_row]) return 0;
+    // if (!is_monotonic[current_row]) return 0;
+    // if (!is_monotonic[next_row]) return 0;
+
+    // Check if the snaking directions agree.
+    // If the snaking directions are in agreement
+    // int current_connector = 0;
+    // if (snaking_direction[current_row] > 0) {
+    //     if (snaking_direction[next_row] > 0) return 0;
+    //     current_connector = first_tile[current_row];
+    //     int next_connector = first_tile[next_row];
+    //     if (next_connector == 0 || next_connector > current_connector) return 0;
+    //     bonus += SNAKING_WEIGHT * pow(current_connector + next_connector, SCORE_MONOTONICITY_POWER);
+    // } else if (snaking_direction[current_row] < 0) {
+    //     if (snaking_direction[next_row] < 0) return 0;
+    //     current_connector = last_tile[current_row];
+    //     int next_connector = last_tile[next_row];
+    //     if (next_connector == 0 || next_connector > current_connector) return 0;
+    //     bonus += SNAKING_WEIGHT * pow(current_connector + next_connector, SCORE_MONOTONICITY_POWER);
+    // }
+
+    //     index = next_index;
+    //     next_index = index + offset;
+    // }
+
+    // A penalty to enforce monotonicity across rows.
+    // float monotonicity_left = 0;
+    // float monotonicity_right = 0;
+    // int max_rank = get_max_rank(board);
+    // for (int i = 1; i < 4; ++i) {
+    //     if (max_tile[rows[i]] == max_rank && max_tile[rows[i-1]] > min_tile[rows[i]]) {
+    //         monotonicity_left += pow(max_tile[rows[i-1]], SCORE_MONOTONICITY_POWER) - pow(
+    //             min_tile[rows[i]], SCORE_MONOTONICITY_POWER);
+    //     }
+    //     if (max_tile[rows[i-1]] == max_rank && max_tile[rows[i]] > min_tile[rows[i-1]]) {
+    //         monotonicity_right += pow(max_tile[rows[i]], SCORE_MONOTONICITY_POWER) - pow(
+    //             min_tile[rows[i-1]], SCORE_MONOTONICITY_POWER);
+    //     }
+    // }
+    // bonus -= SCORE_MONOTONICITY_WEIGHT * std::min(monotonicity_left, monotonicity_right);
     // if (bonus > 0 && !debug) {
     //     print_board(board);
     //     snakeyness_helper(board, true);
     //     printf("bonus: %f\n", bonus);
     // }
-    return bonus;
+    // return bonus;
 }
 
 static float score_heur_board(board_t board, bool score_snakeyness) {
